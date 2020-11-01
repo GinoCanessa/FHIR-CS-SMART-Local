@@ -1,4 +1,8 @@
 ﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 
 namespace smart_local
 {
@@ -36,7 +40,63 @@ namespace smart_local
             System.Console.WriteLine($"Authorize URL: {authorizeUrl}");
             System.Console.WriteLine($"    Token URL: {tokenUrl}");
 
+            Task.Run(() => CreateHostBuilder().Build().Run());
+
+            int listenPort = GetListenPort().Result;
+
+            System.Console.WriteLine($" Listening on: {listenPort}");
+
+            for (int loops = 0; loops < 5; loops++)
+            {
+                System.Threading.Thread.Sleep(1000);
+            }
+
             return 0;
         }
+
+        /// <summary>
+        /// Determine the listening port of the web server
+        /// </summary>
+        /// <returns></returns>
+        public static async Task<int> GetListenPort()
+        {
+            for (int loops = 0; loops < 100; loops++)
+            {
+                await Task.Delay(100);
+                if (Startup.Addresseses == null)
+                {
+                    continue;
+                }
+
+                string address = Startup.Addresseses.Addresses.FirstOrDefault();
+
+                if (string.IsNullOrEmpty(address))
+                {
+                    continue;
+                }
+
+                if (address.Length < 18)
+                {
+                    continue;
+                }
+
+                if ((int.TryParse(address.Substring(17), out int port)) &&
+                    (port != 0))
+                {
+                    return port;
+                }
+            }
+
+            throw new Exception($"Failed to get listen port!");
+        }
+
+        public static IHostBuilder CreateHostBuilder() =>
+            Host.CreateDefaultBuilder()
+                .ConfigureWebHostDefaults(webBuilder =>
+                {
+                    webBuilder.UseUrls("http://127.0.0.1:0");
+                    webBuilder.UseKestrel();
+                    webBuilder.UseStartup<Startup>();
+                });
     }
 }
