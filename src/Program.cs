@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
@@ -26,6 +28,8 @@ namespace smart_local
 
         private static string _tokenUrl = string.Empty;
 
+        private static string _fhirServerUrl = string.Empty;
+
         /// <summary>
         /// Program to access a SMART FHIR Server with a local webserver for redirection
         /// </summary>
@@ -41,6 +45,7 @@ namespace smart_local
             }
 
             System.Console.WriteLine($"  FHIR Server: {fhirServerUrl}");
+            _fhirServerUrl = fhirServerUrl;
 
             Hl7.Fhir.Rest.FhirClient fhirClient = new Hl7.Fhir.Rest.FhirClient(fhirServerUrl);
 
@@ -130,9 +135,40 @@ namespace smart_local
 
             string json = await response.Content.ReadAsStringAsync();
 
-            System.Console.WriteLine($"----- Token -----");
+            System.Console.WriteLine($"----- Authorization Response -----");
             System.Console.WriteLine(json);
-            System.Console.WriteLine($"----- Token -----");
+            System.Console.WriteLine($"----- Authorization Response -----");
+
+            SmartResponse smartResponse = JsonSerializer.Deserialize<SmartResponse>(json);
+
+            Task.Run(() => DoSomethingWithToken(smartResponse));
+        }
+
+        /// <summary>
+        /// Use a SMART token with the FHIR Net API
+        /// </summary>
+        /// <param name="smartResponse"></param>
+        public static void DoSomethingWithToken(SmartResponse smartResponse)
+        {
+            if (smartResponse == null)
+            {
+                throw new ArgumentNullException(nameof(smartResponse));
+            }
+
+            if (string.IsNullOrEmpty(smartResponse.AccessToken))
+            {
+                throw new ArgumentNullException("SMART Access Token is required!");
+            }
+
+            Hl7.Fhir.Rest.FhirClient fhirClient = new Hl7.Fhir.Rest.FhirClient(_fhirServerUrl);
+            fhirClient.OnBeforeRequest += (object sender, Hl7.Fhir.Rest.BeforeRequestEventArgs e) =>
+            {
+                e.RawRequest.Headers.Add("Authorization", $"Bearer {smartResponse.AccessToken}");
+            };
+
+            Hl7.Fhir.Model.Patient patient = fhirClient.Read<Hl7.Fhir.Model.Patient>($"Patient/{smartResponse.PatientId}");
+
+            System.Console.WriteLine($"Read back patient: {patient.Name[0].ToString()}");
         }
 
         /// <summary>
